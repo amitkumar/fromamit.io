@@ -1,0 +1,320 @@
+<html>
+<head>
+	<link href="https://fonts.googleapis.com/css?family=The+Girl+Next+Door" rel="stylesheet">
+
+	<style>
+		body {
+			font-family: 'The Girl Next Door', cursive;
+			position: relative;
+		}
+		.dropzone {
+			position: absolute;
+			top: 0;
+			bottom: 0;
+			left: 0;
+			right: 0;
+			text-align: center;
+		}
+
+		.dz-message {
+			position: absolute;
+			top: 50%;
+			width: 100%;
+			transition: all .2s ease;
+			margin: -.5em 0 0 0;
+		}
+
+		.dz-message.gone {
+			opacity: 0;
+			transform: scale(0);
+		}
+
+		.dz-preview {
+			display: none;
+		}
+
+		canvas {
+			display: none;
+		}
+		.color-block {
+			float: left;
+			width: 10px;
+			height: 10px;
+		}
+
+		.heart-container {}
+
+		.heart-wrapper {
+			width: 2.5%;
+			display: inline-block;
+			position: absolute;
+			top: 50%;
+			left: 50%;
+			margin: -1.25% 0 0 -1.25%;
+		}
+
+		.heart-wrapper.poof {
+			transition: all .8s ease;
+			transform : scale(3);
+			opacity : .15;
+			pointer-events: none;
+		}
+	</style>
+	
+	<style id="base-font-sizes"></style>
+
+	<script>
+		function resizeFonts(){
+				var maxDesktopWindowWidth = 2400,
+					minDesktopWindowWidth = 769,
+					minMobileWidth = 320;
+
+				var windowWidth = window.innerWidth;
+
+				var range = maxDesktopWindowWidth - minDesktopWindowWidth;
+
+				var mobileRange = minDesktopWindowWidth - 1 - minMobileWidth;
+
+				var proportion = {
+					desktop : 1,
+					mobile : 1
+				};
+
+				proportion['desktop'] = (windowWidth - minDesktopWindowWidth) / range;
+				proportion['mobile'] = (windowWidth - minMobileWidth) / mobileRange;
+				
+				if (proportion['desktop'] > 1) {
+					proportion['desktop'] = 1;
+				}
+				if (proportion['mobile'] < 0){
+					proportion['mobile'] = 0;
+				}
+
+				var h1FontSize;
+
+				h1FontSize = 5;
+				var h1 = {
+					mobile : {
+						min : 3,
+						max : 5
+					},
+					desktop : {
+						min : 5,
+						max : 5
+					}
+				};
+
+				var selector = windowWidth >= minDesktopWindowWidth ? 'desktop' : 'mobile';
+
+				h1FontSize = proportion[selector] * (h1[selector].max - h1[selector].min) + h1[selector].min;
+				
+				var styleContent = `
+				.h1, .dz-message {
+					font-size : ${h1FontSize}rem;
+				}
+				`;
+
+				document.getElementById('base-font-sizes').innerHTML = styleContent;
+			}
+			resizeFonts();
+			window.addEventListener('resize', resizeFonts);
+	</script>
+	<script
+	  src="https://code.jquery.com/jquery-3.2.1.slim.min.js"
+	  integrity="sha256-k2WSCIexGzOj3Euiig+TlR8gA0EmPjuc79OEeY5L45g="
+	  crossorigin="anonymous"></script>
+</head>
+<body>
+	<form action="/file-upload"
+	  class="dropzone"
+	  id="image-upload"
+	  >
+		<h1 class="dz-message">Drop a photo here</h1>
+	  </form>
+	<canvas id="target"></canvas>
+
+	<div id="heart-container"></div>
+
+	<div style="display:none; width:30px;">
+		<svg version="1.1" id="heart-svg" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" x="0px" y="0px" viewBox="0 0 32.2 41.5" enable-background="new 0 0 32.2 41.5" xml:space="preserve">
+			<path style="fill:inherit;" d="M30.8,13.5C36.9-0.5,20.4-6.5,16,9.8C11-6.5-4.1,0.2,1.1,13.5L16,41.5L30.8,13.5"/>
+		</svg>
+	</div>
+
+	<script src="./dropzone.js"></script>
+	<script src="./d3/d3.min.js"></script>
+	<script src="./surfacecurve-color.js"></script>
+	<script>
+		var processImageData = function(imageData){
+			setTimeout(function(){
+				$('form').remove();	
+			}, 500);
+			
+			$('.dz-message').addClass('gone');
+			
+			var colors = [];
+			var colorHash = {};
+			imageData.data.forEach(function(num, index){
+				var colorIndex = Math.floor(index / 4);
+				colors[colorIndex] = colors[colorIndex] || [];
+				colors[colorIndex].push(num);
+			});
+			console.log('colors.length', colors.length);
+			colors.forEach(function(rgbaArray){
+				var rgba = `rgba(${rgbaArray[0]},${rgbaArray[1]},${rgbaArray[2]},${rgbaArray[3]})`
+				colorHash[rgba] = true;
+			});
+
+			colors = Object.keys(colorHash);
+
+			colors = colors.sort(function(colorA, colorB) {
+				return window.surfacecurve.color(colorA).hue() - window.surfacecurve.color(colorB).hue();
+			});
+
+			var nodes = colors.map(function(color){
+				return {
+					color : color
+				};
+			});
+
+			// console.log(colors);
+			// colors.forEach(function(color){
+				// var div = document.createElement('div');
+				// div.className = 'color-block';
+				// div.style.background = color;
+				// frag.innerHTML = `<div style="background-color:${color};" class="color-block"></div>`;
+				// document.body.append(div);
+			// });
+
+			var content = document.getElementById('heart-svg').outerHTML;
+			
+			var hearts = d3.select('#heart-container')
+				.selectAll('div')
+				.data(nodes)
+				.enter()
+				.append('div')
+				.attr('class', 'heart-wrapper')
+				.attr('data-index', function(d, i){
+					return i;
+				})
+				.style("fill", function(d, i){
+					return d.color;
+				})
+				.on('click', function(e){
+					// console.log(this, $(this).closest('.heart-wrapper'));
+					var $heartWrapper = $(this);
+					// var $this = $(this);
+					var $clone = $heartWrapper.clone();
+					$('body').append($clone);
+					$clone.css('transform', $clone.css('transform') + ' scale(2)');
+					$clone.addClass('poof');
+					$heartWrapper.remove();
+
+					console.log(e.index);
+					nodes.splice( e.index, 1 )
+
+					forceSimulation.nodes(nodes).restart();
+				})
+				.html(content)
+
+				
+			// var paths = hearts.selectAll('path').on('click', function(e){
+			// 		console.log(this, $(this).closest('.heart-wrapper'));
+			// 		var $heartWrapper = $(this).closest('.heart-wrapper');
+			// 		// var $this = $(this);
+			// 		var $clone = $heartWrapper.clone();
+			// 		$('body').append($clone);
+			// 		$clone.css('transform', $clone.css('transform') + ' scale(2)');
+			// 		$clone.addClass('poof');
+			// 		$heartWrapper.remove();
+
+			// 		console.log($heartWrapper.data('index'));
+			// 		nodes.splice( $heartWrapper.data('index'), 1 )
+
+			// 		forceSimulation.nodes(nodes).restart();
+			// 	});
+
+			// Draw all the hearts in the center. Give them a d3 force layout, then animate them to 
+			// their target positions (http://jsdatav.is/visuals.html?id=26648f33f3bc9725604a)
+			
+			var windowCenter = [
+				window.innerWidth/2, 
+				window.innerHeight/2
+			];
+
+			var chargeStrength = -80;
+
+			var forceSimulation = d3.forceSimulation(nodes)
+				.force("charge", d3.forceManyBody().distanceMax(Math.min(windowCenter[0], windowCenter[1])).strength(chargeStrength))
+				.force("mouse.x", d3.forceX().strength(0))
+				.force("mouse.y", d3.forceY().strength(0))
+				.velocityDecay(.6)
+				.on('tick', function(){
+					hearts.style('transform', function(d, i){
+						return `translate3d(${d.x}px,${d.y}px,0)`
+					});
+				})
+
+			var releaseHeartsTimeout = null;
+
+			d3.select('body').on('mousemove touchdown touchmove', function (e) {
+				clearTimeout(releaseHeartsTimeout);
+
+				var mousePosition = d3.mouse(this);
+				var relativeToCenter = [
+					mousePosition[0] - windowCenter[0],
+					mousePosition[1] - windowCenter[1]
+				];
+
+				chargeStrength = -.1;
+				forceSimulation.force("charge").strength(chargeStrength);
+				forceSimulation.force('mouse.x').strength(.05).x(relativeToCenter[0]);
+				forceSimulation.force('mouse.y').strength(.05).y(relativeToCenter[1]);
+				forceSimulation.alphaTarget(.3).restart();
+
+				releaseHeartsTimeout = setTimeout(releaseHearts, 6000);
+			});
+
+			function releaseHearts(){
+				chargeStrength = -80;
+				forceSimulation.force("charge").strength(chargeStrength);
+				forceSimulation.force('mouse.x').strength(0).x(0);
+				forceSimulation.force('mouse.y').strength(0).y(0);
+				forceSimulation
+				  .alphaTarget(0.3)
+				  .restart();
+			}
+
+			d3.select('body').on('mouseout', releaseHearts)
+
+		}
+
+		Dropzone.options.imageUpload = {
+			acceptedFiles : 'image/*',
+			init: function() {
+				this.on("addedfile", function(file) { 
+					console.log('File uploaded', file)
+					var FR= new FileReader();
+					FR.onload = function(e) {
+					   var img = new Image();
+					   img.onload = function() {
+						 // document.body.append(img);
+						 var canvas = document.getElementById('target');
+						 // img.width = img.height = 50;
+						 canvas.width = 10;
+						 canvas.height = 10;
+						 var context = canvas.getContext('2d');
+						 context.drawImage(img, 0, 0, 10, 10);
+						 
+						 processImageData(context.getImageData(0, 0, canvas.width, canvas.height));
+					   };
+					   img.src = e.target.result;
+					};       
+					FR.readAsDataURL( file );
+
+				});
+			}
+		};
+	</script>
+</body>
+</html>
